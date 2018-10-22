@@ -1,4 +1,4 @@
-//
+//  Neat function pointer excercise.
 //  Created by Petri Ollonen on 18/07/2018.
 //  Copyright © 2018 Petri Ollonen. All rights reserved.
 //
