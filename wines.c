@@ -6,15 +6,15 @@
 //
 //  Created by Petri Ollonen on 02/11/2017.
 //  Copyright © 2017 Petri Ollonen. All rights reserved.
-//
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #define FALSE 0
 #define TRUE  1
-#define SIZE  64
+#define SIZE  32+1
 
 typedef struct Node
 {
@@ -23,22 +23,27 @@ typedef struct Node
 } Node;
 
 /*Function prototypes*/
-int stringInput(char buffer[]);
-int insertNewNode(Node **head, char *p, int dataSize);
-int deleteNode(Node **head, char wine[]);
-void printWines(struct Node *head);
+int fileCheck(const char *fileName);
+size_t stringInput(char *buffer);
+int insertNewNode(Node **head, char *buffer, size_t dataSize);
+int deleteNode(Node **head, char *wine);
+void deleteList(Node *head);
+void printWines(Node *head);
 
 int main(void)
 {
-    /*Normally Names of the wines should fit in this size of an array*/
     char buf[SIZE];
     char userChoice;
-    char *ptr;
+    char *fName = "winelist.txt";
     
-    int dataArraySize = 0;
     int success = 0;
     
-    struct Node *head = NULL;
+    size_t dataArraySize = 0;
+    
+    Node *head = NULL;
+    Node *ptr = NULL; 
+    
+    FILE *f;
     
     printf("This program lists wines to be drinked.\n");
     printf("\nValid user choices of action :\n");
@@ -47,107 +52,155 @@ int main(void)
     printf("\t\'p\' - Print the list of wines to be drinked\n");
     printf("\t\'e\' - Exit the program\n");
     
+    if(fileCheck(fName))
+    {
+        f = fopen("winelist.txt", "r");
+        printf("\nThe wines to be drinked:\n");
+        while(fgets(buf, SIZE, f) != NULL)
+        {
+            printf("%s", buf);
+            dataArraySize = strlen(buf);
+            success = insertNewNode(&head, buf, dataArraySize);
+            if(success == FALSE)
+            {
+                printf("Something went wrong - new wine was not added due to memory allocation failure");
+                deleteList(head);
+                fclose(f);
+
+                return -1;
+            }
+        }
+        fclose(f);
+    }
+
     for(;;)
     {
         printf("\nPlease give your choice of action (\'a\', \'d\', \'p\' or \'e\'): ");
         userChoice = getchar();
+        while (getchar() != '\n');
         
         switch(userChoice)
         {
             case 'a':
-                printf("\nEnter a name of the new Wine to be drinked: ");
-                getchar();
+                printf("\nEnter a name of the new Wine to be drinked:\n");
                 dataArraySize = stringInput(buf);
-                ptr = &buf[0];
-                success = insertNewNode(&head, ptr, dataArraySize);
+                success = insertNewNode(&head, buf, dataArraySize);
                 if(success == FALSE)
                 {
                     printf("Something went wrong - new wine was not added due to memory allocation failure");
+                    deleteList(head);
                     return -1;
                 }
-                memset(buf, 0, SIZE);
+                f = fopen("winelist.txt", "a");
+                fprintf(f, "%s", buf);
+                fclose(f);
                 break;
             case 'd':
-                printf("\nEnter the drinked wine to be removed from the list: ");
-                getchar();
-                
-                stringInput(buf);
-                
+                printf("\nEnter the drinked wine to be removed from the list:\n");
+                dataArraySize = stringInput(buf);
                 success = deleteNode(&head, buf);
-                if(success == FALSE)
-                    printf("\nThe given wine was not found from the list!\n");
+                if(success)
+                {
+                    ptr = head;
+                    f = fopen("winelist.txt", "w");
+                    while (ptr != NULL)
+                    {
+                        fprintf(f, "%s", ptr->data);
+                        ptr = ptr->next;
+                    }
+                    fclose(f);
+                }
+                else
+                    printf("\nThe wine was not found from the list!\n");
                 break;
             case 'p':
                 if(head == NULL)
                     printf("The wine list is empty\n");
                 else
                     printWines(head);
-                getchar();
                 break;
             case 'e':
+                deleteList(head);
                 return 0;
             default:
-                printf("\nNot a valid choice of action!");
-                getchar();
+                printf("\nNot a valid choice of action!\n");
+                while (getchar() != '\n')
+                    ;
                 break;
         }
     }
 }
 
-int stringInput(char buffer[])
+int fileCheck(const char *fileName)
 {
-    int c;
-    int i = 0;
-    
-    while((c = getchar()) != '\n' && (i < SIZE) && (c != EOF))
+    int file;
+
+    if(!access(fileName, F_OK ))
+        file = TRUE;
+    else
     {
-        buffer[i] = c;
-        i++;
+        printf("\nThe wine list is empty\n");
+        file = FALSE;
     }
-    buffer[i] = '\0';
-    return i;
-    
-    //    printf("%s %d\n", buffer, (int)strlen(buffer));
+
+    return file;
 }
 
-int insertNewNode(Node **head, char *p, int dataSize)
+size_t stringInput(char *buffer)
 {
-    Node *newNode = (struct Node*) malloc(sizeof(struct Node));
+    size_t arraySize;
+
+    fgets(buffer, SIZE, stdin);
+    while (getchar() != '\n')
+        ;
+    arraySize = strlen(buffer);
+    if(arraySize == SIZE-1)
+        buffer[SIZE-2] = '\n';
+
+    return arraySize;
+}
+
+int insertNewNode(Node **head, char *buffer, size_t dataSize)
+{
+    char *ptr = buffer;
+
+    Node *newNode = (Node *) malloc(sizeof(Node));
     if(!newNode)
         return FALSE;
     
-    newNode->data = (char*) malloc(sizeof(char) * dataSize+1);
+    newNode->data = (char *) malloc(sizeof(char) * dataSize + 1);
     if(!(newNode->data))
         return FALSE;
     
-    strcpy(newNode->data, p);
+    strcpy(newNode->data, ptr);
     newNode->next = *head;
     *head = newNode;
     
     return TRUE;
 }
 
-int deleteNode(Node **head, char wine[])
+int deleteNode(Node **head, char *wine)
 {
     Node *temp = *head;
     Node *prev = NULL;
     
-    // If head node to be deleted
-    if (temp != NULL && !strcmp(temp->data, wine))
+    // If first node to be deleted
+    if (temp != NULL && (strcmp(temp->data, wine) == 0))
     {
-        *head = temp->next;   // Changed head
-        free(temp);           // free old head
+        *head = temp->next;
+        free(temp);
+        
         return TRUE;
     }
     
-    // Search for the key to be deleted, keep track
-    while (temp != NULL && strcmp(temp->data, wine))
+    // Search for the node to be deleted keeping track
+    while (temp != NULL && !(strcmp(temp->data, wine) == 0))
     {
         prev = temp;
         temp = temp->next;
     }
     
-    // If key not present in linked list
+    // If node not present in linked list
     if (temp == NULL)
         return FALSE;
     
@@ -161,13 +214,27 @@ int deleteNode(Node **head, char wine[])
     return TRUE;
 }
 
+void deleteList(Node *head)
+{
+    Node *ptr = head;
+    Node *tmp;
+
+    while (ptr != NULL)
+    {
+        tmp = ptr->next;
+        free(ptr);
+        ptr = tmp;
+    }
+    head = NULL;
+}
+
 // This function prints contents of the linked list
-void printWines(struct Node *p)
+void printWines(Node *p)
 {
     printf("\nThe wines to be drinked:\n");
     while (p != NULL)
     {
-        printf("%s\n", p->data);
+        printf("%s", p->data);
         p = p->next;
     }
 }
