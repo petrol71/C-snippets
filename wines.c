@@ -1,9 +1,9 @@
 // Implement a winelist program in C that has following features:
-// The user can add wines to be drinked
+// The user can add wines to the winelist
 // The user can remove any wine from the list by checking it as drinked
-// The user can print out the wines to be drinked onto the screen
+// The user can print out the winelist to the screen
 // The winelist must not be static.
-//
+
 //  Created by Petri Ollonen on 02/11/2017.
 //  Copyright © 2017 Petri Ollonen. All rights reserved.
 
@@ -15,28 +15,34 @@
 #define FALSE 0
 #define TRUE  1
 #define SIZE  32+1
+#define IN_STOCK 1
+#define DRINKED 0
 
 typedef struct Node
 {
+    int status;
     char *data;
     struct Node *next;
 } Node;
 
-/*Function prototypes*/
 int fileCheck(const char *fileName);
 size_t stringInput(char *buffer);
 int insertNewNode(Node **head, char *buffer, size_t dataSize);
-int deleteNode(Node **head, char *wine);
+int markWinesDrinked(Node *head, char *wine);
+void deleteNodes(Node **head);
 void deleteList(Node *head);
-void printWines(Node *head);
+void printWinelist(Node *head);
+void printDrinkedWines(Node *head);
 
 int main(void)
 {
     char buf[SIZE];
     char userChoice;
     char *fName = "winelist.txt";
-    
+    char markWines = '\0';
+
     int success = 0;
+    int drinkedWines;
     
     size_t dataArraySize = 0;
     
@@ -45,17 +51,18 @@ int main(void)
     
     FILE *f;
     
-    printf("This program lists wines to be drinked.\n");
+    printf("\nThis program handles winelist.\n");
+    printf("The user may add new wines or select them as drinked.\n"); 
     printf("\nValid user choices of action :\n");
-    printf("\t\'a\' - Add a wine to be drinked\n");
-    printf("\t\'d\' - Delete the drinked wine\n");
-    printf("\t\'p\' - Print the list of wines to be drinked\n");
+    printf("\t\'a\' - Add a wine to the winelist\n");
+    printf("\t\'d\' - Mark a wine as drinked\n");
+    printf("\t\'p\' - Print the winelist\n");
     printf("\t\'e\' - Exit the program\n");
     
     if(fileCheck(fName))
     {
         f = fopen("winelist.txt", "r");
-        printf("\nThe wines to be drinked:\n");
+        printf("\nUp to date winelist:\n");
         while(fgets(buf, SIZE, f) != NULL)
         {
             printf("%s", buf);
@@ -77,12 +84,13 @@ int main(void)
     {
         printf("\nPlease give your choice of action (\'a\', \'d\', \'p\' or \'e\'): ");
         userChoice = getchar();
-        while (getchar() != '\n');
+        while (getchar() != '\n')
+            ;
         
         switch(userChoice)
         {
             case 'a':
-                printf("\nEnter a name of the new Wine to be drinked:\n");
+                printf("\nAdd a new wine to the winelist:\n");
                 dataArraySize = stringInput(buf);
                 success = insertNewNode(&head, buf, dataArraySize);
                 if(success == FALSE)
@@ -96,28 +104,38 @@ int main(void)
                 fclose(f);
                 break;
             case 'd':
-                printf("\nEnter the drinked wine to be removed from the list:\n");
-                dataArraySize = stringInput(buf);
-                success = deleteNode(&head, buf);
-                if(success)
+                printWinelist(head);
+                printf("\nMark wines as drinked (to be removed from the list):\n");
+                do
                 {
-                    ptr = head;
-                    f = fopen("winelist.txt", "w");
-                    while (ptr != NULL)
-                    {
-                        fprintf(f, "%s", ptr->data);
-                        ptr = ptr->next;
-                    }
-                    fclose(f);
+                    if((markWines == 'y') || (markWines == 'Y'))
+                        printf("\nMark next wine as drinked:\n");
+                    dataArraySize = stringInput(buf);
+                    if(!(drinkedWines = markWinesDrinked(head, buf)))
+                        printf("The wine was not found from the list!\n");
+                    //actually any other than 'y' terminates the loop
+                    printf("Do you wish to mark more wines as drinked (y/n)?\n");
+                    markWines = getchar();
+                    while (getchar() != '\n')
+                        ;
+                } while((markWines == 'y') || (markWines == 'Y')); 
+                
+                printDrinkedWines(head);
+                deleteNodes(&head);
+                ptr = head;
+                f = fopen("winelist.txt", "w");
+                while (ptr != NULL)
+                {
+                    fprintf(f, "%s", ptr->data);
+                    ptr = ptr->next;
                 }
-                else
-                    printf("\nThe wine was not found from the list!\n");
+                fclose(f);
                 break;
             case 'p':
                 if(head == NULL)
                     printf("The wine list is empty\n");
                 else
-                    printWines(head);
+                    printWinelist(head);
                 break;
             case 'e':
                 deleteList(head);
@@ -172,6 +190,7 @@ int insertNewNode(Node **head, char *buffer, size_t dataSize)
     if(!(newNode->data))
         return FALSE;
     
+    newNode->status = IN_STOCK;
     strcpy(newNode->data, ptr);
     newNode->next = *head;
     *head = newNode;
@@ -179,42 +198,63 @@ int insertNewNode(Node **head, char *buffer, size_t dataSize)
     return TRUE;
 }
 
-int deleteNode(Node **head, char *wine)
+int markWinesDrinked(Node *head, char *buffer)
 {
-    Node *temp = *head;
+    Node *ptr = head;
     Node *prev = NULL;
-    
-    // If first node to be deleted
-    if (temp != NULL && (strcmp(temp->data, wine) == 0))
+
+    if (ptr != NULL && (strcmp(ptr->data, buffer) == 0))
     {
-        *head = temp->next;
-        free(temp->data);
-        free(temp);
-        
+        ptr->status = DRINKED;
         return TRUE;
     }
-    
-    // Search for the node to be deleted keeping track
-    while (temp != NULL && !(strcmp(temp->data, wine) == 0))
+
+    while (ptr != NULL && !(strcmp(ptr->data, buffer) == 0))
     {
-        prev = temp;
-        temp = temp->next;
+        prev = ptr;
+        ptr = ptr->next;
     }
-    
-    // If node not present in linked list
-    if (temp == NULL)
+
+    if (ptr == NULL)
         return FALSE;
     
-    // Unlink the node from linked list
-    prev->next = temp->next;
-    
-    // Free memory
-    free(temp->data);
-    free(temp);
+    ptr->status = DRINKED;
     
     return TRUE;
 }
 
+void deleteNodes(Node **head)
+{
+    Node *ptr = *head;
+    Node *prev = NULL;
+    
+    while (ptr != NULL && ptr->status == DRINKED) 
+    { 
+        *head = ptr->next;
+        free(ptr->data);
+        free(ptr);
+        ptr = *head;
+    } 
+
+    while (ptr != NULL) 
+    { 
+        while (ptr != NULL && ptr->status != DRINKED) 
+        { 
+            prev = ptr; 
+            ptr = ptr->next; 
+        } 
+  
+        if (ptr == NULL)
+            return; 
+  
+        prev->next = ptr->next; 
+  
+        free(ptr->data);
+        free(ptr);
+  
+        ptr = prev->next; 
+    } 
+}
 void deleteList(Node *head)
 {
     Node *ptr = head;
@@ -229,13 +269,27 @@ void deleteList(Node *head)
     head = NULL;
 }
 
-// This function prints contents of the linked list
-void printWines(Node *p)
+void printWinelist(Node *head)
 {
-    printf("\nThe wines to be drinked:\n");
-    while (p != NULL)
+    Node *ptr = head;
+
+    printf("\nUp to date winelist:\n");
+    while (ptr != NULL)
     {
-        printf("%s", p->data);
-        p = p->next;
+        printf("%s", ptr->data);
+        ptr = ptr->next;
+    }
+}
+
+void printDrinkedWines(Node *head)
+{
+    Node *ptr = head;
+
+    printf("\nListed wines removed from the winelist:\n");
+    while (ptr != NULL)
+    {
+        if(ptr->status == DRINKED)
+            printf("%s", ptr->data);
+        ptr = ptr->next;
     }
 }
