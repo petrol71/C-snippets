@@ -2,7 +2,6 @@
 //  Implementation is very exhaustive!
 //  Created by Petri Ollonen on 18/07/2018.
 //  Copyright © 2018 Petri Ollonen. All rights reserved.
-//
 
 #include <stdio.h>
 
