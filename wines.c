@@ -188,6 +188,7 @@ int deleteNode(Node **head, char *wine)
     if (temp != NULL && (strcmp(temp->data, wine) == 0))
     {
         *head = temp->next;
+        free(temp->data);
         free(temp);
         
         return TRUE;
